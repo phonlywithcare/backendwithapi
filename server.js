@@ -1,174 +1,215 @@
-// ============================
-//  PHONLY BACKEND (Fully Fixed)
-// ============================
-
-const express = require("express");
-const cors = require("cors");
-const mongoose = require("mongoose");
-const session = require("express-session");
-const path = require("path");
-const dotenv = require("dotenv");
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import session from 'express-session';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
-const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Middlewares
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
-}));
+const app = express();
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Session (for admin)
 app.use(session({
-  secret: process.env.SESSION_SECRET || "phonly-secret",
+  secret: process.env.SESSION_SECRET || 'change_this',
   resave: false,
-  saveUninitialized: true
+  saveUninitialized: false,
+  cookie: { maxAge: 24*60*60*1000 }
 }));
 
-// ============================
-//  DATABASE CONNECTION
-// ============================
-mongoose
-  .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-  })
-  .then(() => console.log("Connected to MongoDB ✔️"))
-  .catch((err) => console.error("MongoDB Error ❌", err));
+// Serve admin static files
+app.use('/admin/static', express.static(path.join(__dirname, 'public')));
 
-// ============================
-//  MODELS
-// ============================
+// MongoDB connection
+const MONGO_URI = process.env.MONGO_URI || '';
+let usingMongo = false;
 
-const BookingSchema = new mongoose.Schema({
+async function connectDB(){
+  if(!MONGO_URI){
+    console.warn('MONGO_URI not set — running in in-memory fallback mode.');
+    return;
+  }
+  try{
+    await mongoose.connect(MONGO_URI, { dbName: 'phonly' });
+    usingMongo = true;
+    console.log('Connected to MongoDB');
+  }catch(err){
+    console.error('MongoDB connection error:', err.message);
+  }
+}
+connectDB();
+
+// Define schemas
+const bookingSchema = new mongoose.Schema({
   name: String,
   phone: String,
   device: String,
   service: String,
   address: String,
   datetime: String,
-  status: { type: String, default: "pending" },
   createdAt: { type: Date, default: Date.now }
 });
-const Booking = mongoose.model("Booking", BookingSchema);
-
-const ReviewSchema = new mongoose.Schema({
+const reviewSchema = new mongoose.Schema({
   name: String,
   rating: Number,
-  message: String,
+  text: String,
   createdAt: { type: Date, default: Date.now }
 });
-const Review = mongoose.model("Review", ReviewSchema);
 
-// ============================
-//  HEALTH CHECK ROUTES
-// ============================
-app.get("/", (req, res) => {
-  res.send("Phonly Backend Running ✔");
-});
-app.get("/api/test", (req, res) => {
-  res.json({ success: true, message: "API Working" });
-});
+let Booking, Review;
+if(usingMongo){
+  Booking = mongoose.model('Booking', bookingSchema);
+  Review = mongoose.model('Review', reviewSchema);
+} else {
+  // in-memory fallback
+  Booking = null;
+  Review = null;
+}
 
-// ============================
-//  BOOKING ROUTES
-// ============================
+const memory = {
+  bookings: [],
+  reviews: [
+    { id: Date.now()-2000, name: 'Amit', rating:5, text:'Quick service & genuine parts.'},
+    { id: Date.now()-1000, name: 'Priya', rating:5, text:'Fixed my screen same day.'}
+  ]
+};
 
-// Create Booking
-app.post("/api/bookings", async (req, res) => {
-  try {
-    const booking = await Booking.create(req.body);
-    res.json({ success: true, booking });
-  } catch (err) {
-    res.status(500).json({ success: false, message: "Error saving booking" });
+// Helper: auth middleware
+function ensureAdmin(req,res,next){
+  if(req.session && req.session.admin === true) return next();
+  res.status(401).json({ error: 'Unauthorized' });
+}
+
+// ------------------ API ------------------
+
+// health
+app.get('/', (req,res)=> res.send('Phonly backend up'));
+
+// POST booking
+app.post('/api/book', async (req,res)=>{
+  const payload = req.body;
+  if(Booking){
+    try{
+      const b = await Booking.create(payload);
+      return res.json({ success:true, booking: b });
+    }catch(e){
+      console.error(e);
+      return res.status(500).json({ success:false });
+    }
+  } else {
+    const b = { id: Date.now(), ...payload, createdAt: new Date() };
+    memory.bookings.unshift(b);
+    return res.json({ success:true, booking: b });
   }
 });
 
-// Get All Bookings (Admin Only)
-app.get("/api/admin/bookings", async (req, res) => {
-  if (!req.session.admin) return res.status(403).json({ message: "Unauthorized" });
-
-  const bookings = await Booking.find().sort({ createdAt: -1 });
-  res.json(bookings);
-});
-
-// Update Booking Status
-app.put("/api/bookings/:id", async (req, res) => {
-  try {
-    await Booking.findByIdAndUpdate(req.params.id, req.body);
-    res.json({ success: true, message: "Booking updated" });
-  } catch {
-    res.status(500).json({ success: false, message: "Update failed" });
+// GET bookings (admin)
+app.get('/api/bookings', ensureAdmin, async (req,res)=>{
+  if(Booking){
+    const list = await Booking.find().sort({ createdAt: -1 }).limit(200).lean();
+    return res.json(list);
+  } else {
+    return res.json(memory.bookings);
   }
 });
 
-// Delete Booking
-app.delete("/api/bookings/:id", async (req, res) => {
-  try {
-    await Booking.findByIdAndDelete(req.params.id);
-    res.json({ success: true, message: "Booking deleted" });
-  } catch {
-    res.status(500).json({ success: false, message: "Delete failed" });
+// delete booking (admin)
+app.delete('/api/bookings/:id', ensureAdmin, async (req,res)=>{
+  const id = req.params.id;
+  if(Booking){
+    try{
+      await Booking.deleteOne({ _id: id });
+      return res.json({ success:true });
+    }catch(e){
+      return res.status(500).json({ success:false });
+    }
+  } else {
+    memory.bookings = memory.bookings.filter(b => String(b.id) !== String(id));
+    return res.json({ success:true });
   }
 });
 
-// ============================
-//  REVIEW ROUTES (FIXED)
-// ============================
-
-// Create Review
-app.post("/api/reviews", async (req, res) => {
-  try {
-    const review = await Review.create(req.body);
-    res.json({ success: true, review });
-  } catch {
-    res.status(500).json({ success: false, message: "Review error" });
+// reviews
+app.get('/api/reviews', async (req,res)=>{
+  if(Review){
+    const list = await Review.find().sort({ createdAt: -1 }).limit(200).lean();
+    return res.json(list);
+  } else {
+    return res.json(memory.reviews);
+  }
+});
+app.post('/api/review', async (req,res)=>{
+  const payload = req.body;
+  if(Review){
+    try{
+      const r = await Review.create(payload);
+      return res.json({ success:true, review: r });
+    }catch(e){
+      console.error(e);
+      return res.status(500).json({ success:false });
+    }
+  } else {
+    const r = { id: Date.now(), ...payload, createdAt: new Date() };
+    memory.reviews.unshift(r);
+    return res.json({ success:true, review: r });
   }
 });
 
-// Get All Reviews
-app.get("/api/reviews", async (req, res) => {
-  try {
-    const reviews = await Review.find().sort({ createdAt: -1 });
-    res.json(reviews);
-  } catch {
-    res.status(500).json({ message: "Error fetching reviews" });
-  }
-});
-
-// ============================
-//  ADMIN LOGIN
-// ============================
-app.post("/api/admin/login", (req, res) => {
+// ------------------ Admin auth ------------------
+// POST login
+app.post('/admin/login', (req,res)=>{
   const { email, password } = req.body;
+  const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@phonly.com';
+  const ADMIN_PASS = process.env.ADMIN_PASS || 'password';
 
-  if (
-    email === process.env.ADMIN_EMAIL &&
-    password === process.env.ADMIN_PASS
-  ) {
+  if(email === ADMIN_EMAIL && password === ADMIN_PASS){
     req.session.admin = true;
-    return res.json({ success: true });
+    return res.json({ success:true });
+  } else {
+    return res.status(401).json({ success:false, error: 'Invalid credentials' });
   }
-
-  res.status(401).json({ success: false, message: "Invalid login" });
 });
 
-// Logout
-app.get("/admin/logout", (req, res) => {
-  req.session.destroy();
-  res.json({ success: true });
+// GET logout
+app.get('/admin/logout', (req,res)=>{
+  req.session.destroy(()=>{ res.json({ success:true }); });
 });
 
-// ============================
-//  STATIC ADMIN PANEL
-// ============================
-app.use("/admin", express.static(path.join(__dirname, "public")));
+// serve admin UI
+app.get('/admin', ensureAdmin, (req,res)=>{
+  res.sendFile(path.join(__dirname,'public','admin.html'));
+});
 
-// ============================
-//  START SERVER
-// ============================
+// admin API - counts for dashboard
+app.get('/admin/stats', ensureAdmin, async (req,res)=>{
+  let bookingsList = [];
+  if(Booking){
+    bookingsList = await Booking.find().lean();
+  } else {
+    bookingsList = memory.bookings;
+  }
+  // simple stats
+  const totalBookings = bookingsList.length;
+  const byService = {};
+  bookingsList.forEach(b => {
+    const s = b.service || 'Unknown';
+    byService[s] = (byService[s]||0) + 1;
+  });
+  res.json({ totalBookings, byService });
+});
+
+// Serve other admin static files
+app.get('/admin/static/*', (req,res)=>{
+  res.sendFile(path.join(__dirname, 'public', req.params[0]));
+});
+
+// start
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log("Server running on port", PORT));
+app.listen(PORT, ()=> console.log('Server started on', PORT));
