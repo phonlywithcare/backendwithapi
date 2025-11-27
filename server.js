@@ -24,9 +24,14 @@ const BookingSchema = new mongoose.Schema({
   name: String,
   phone: String,
   device: String,
+   issue: String,   // add this
+  date: String,    // add this
+  time: String,    // add this
+  status: { type: String, default: "Pending" }, // add statu
   service: String,
   address: String,
   datetime: String,
+  createdAt: { type: Date, default: Date.now },
 });
 
 const ReviewSchema = new mongoose.Schema({
