@@ -1,111 +1,95 @@
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 
-// CORS FIXED – accepts Vercel frontends safely
-app.use(cors({
-  origin: (origin, callback) => {
-    const allowed = [
-      "https://phonly.vercel.app",
-      "https://phonly-frontend.vercel.app",
-      "https://www.phonly-frontend.vercel.app",
-      "http://localhost:3000"
-    ];
+// MIDDLEWARE
+app.use(cors());
+app.use(express.json());
 
-    if (!origin) return callback(null, true); 
-    if (allowed.includes(origin)) return callback(null, true);
-    if (origin.endsWith("vercel.app")) return callback(null, true);  // <--- FIXED
-
-    return callback(new Error("CORS blocked"), false);
-  }
-}));
-
-app.use(express.json({ limit: "2mb" }));
-
-// MONGO FIX
-const mongoUrl = process.env.MONGO_URL;
-if (!mongoUrl) {
-  console.error("❌ MONGO_URL missing!");
-}
-
-mongoose.connect(mongoUrl, {
+// CONNECT TO MONGODB
+mongoose.connect(process.env.MONGO_URL, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => console.log("✅ MongoDB connected"))
-.catch(err => console.error("❌ MongoDB error:", err));
+.then(() => console.log("MongoDB Connected ✔"))
+.catch((err) => console.log("Mongo Error ❌", err));
 
 // SCHEMAS
-const bookingSchema = new mongoose.Schema({
+const BookingSchema = new mongoose.Schema({
   name: String,
   phone: String,
-  brand: String,
   device: String,
   service: String,
   address: String,
   datetime: String,
-  createdAt: { type: Date, default: Date.now },
 });
 
-const Booking = mongoose.model("Booking", bookingSchema);
-
-const reviewSchema = new mongoose.Schema({
+const ReviewSchema = new mongoose.Schema({
   name: String,
   rating: Number,
   message: String,
   createdAt: { type: Date, default: Date.now },
 });
 
-const Review = mongoose.model("Review", reviewSchema);
+const Booking = mongoose.model("Booking", BookingSchema);
+const Review = mongoose.model("Review", ReviewSchema);
 
-// ROUTES
-app.get("/", (req, res) => res.send("Phonly backend OK"));
-
-// CREATE BOOKING — FIXED VALIDATION
+// ----------------------
+// BOOKING ROUTES
+// ----------------------
 app.post("/api/bookings", async (req, res) => {
   try {
-    const booking = new Booking(req.body);
-    await booking.save();
-    res.json({ message: "Booking saved", booking });
+    const newBooking = new Booking(req.body);
+    await newBooking.save();
+    res.json({ message: "Booking added", booking: newBooking });
   } catch (err) {
-    console.log("Booking Error:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Booking error" });
   }
 });
 
-// GET BOOKINGS
 app.get("/api/bookings", async (req, res) => {
   try {
-    const bookings = await Booking.find().sort({ createdAt: -1 });
-    res.json(bookings);
+    const all = await Booking.find().sort({ _id: -1 });
+    res.json(all);
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Fetch error" });
   }
 });
 
-// CREATE REVIEW
+// ----------------------
+// REVIEW ROUTES
+// ----------------------
 app.post("/api/reviews", async (req, res) => {
   try {
-    const review = new Review(req.body);
-    await review.save();
-    res.json({ message: "Review saved", review });
+    const newReview = new Review(req.body);
+    await newReview.save();
+    res.json({ message: "Review added", review: newReview });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Review error" });
   }
 });
 
-// GET REVIEWS
 app.get("/api/reviews", async (req, res) => {
   try {
-    const reviews = await Review.find().sort({ createdAt: -1 });
-    res.json(reviews);
+    const all = await Review.find().sort({ _id: -1 });
+    res.json(all);
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Fetch error" });
   }
 });
 
-// SERVER
-const PORT = process.env.PORT || 10000;
+// ----------------------
+// TEST ROUTE
+// ----------------------
+app.get("/", (req, res) => {
+  res.send("Backend Running ✔");
+});
+
+// START SERVER
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log("Server running on port " + PORT));
