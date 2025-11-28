@@ -2,8 +2,8 @@
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
-import Booking from "./models/Booking.js";
-import Review from "./models/Review.js";
+import Booking from "./Booking.js";
+import Review from "./Review.js";
 
 const app = express();
 
