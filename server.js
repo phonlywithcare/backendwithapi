@@ -1,100 +1,119 @@
+// server.js
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
-import dotenv from "dotenv";
-
-dotenv.config();
+import Booking from "./Booking.js";
+import Review from "./Review.js";
 
 const app = express();
 
-// MIDDLEWARE
+// Middlewares
 app.use(cors());
 app.use(express.json());
 
-// CONNECT TO MONGODB
-mongoose.connect(process.env.MONGO_URL, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log("MongoDB Connected ✔"))
-.catch((err) => console.log("Mongo Error ❌", err));
+// MongoDB connection
+const mongoUrl = process.env.MONGO_URL || "your_mongo_url_here";
+mongoose
+  .connect(mongoUrl, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => {
+    console.error("MongoDB connection error:", err.message || err);
+  });
 
-// SCHEMAS
-const BookingSchema = new mongoose.Schema({
-  name: String,
-  phone: String,
-  device: String,
-   issue: String,   // add this
-  date: String,    // add this
-  time: String,    // add this
-  status: { type: String, default: "Pending" }, // add statu
-  service: String,
-  address: String,
-  datetime: String,
-  createdAt: { type: Date, default: Date.now },
-});
+// ------------------------------
+// Helper: Booking ID generator
+// ------------------------------
+function generateBookingId() {
+  // PHN- + 6 chars alphanumeric uppercase
+  return "PHN-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+}
 
-const ReviewSchema = new mongoose.Schema({
-  name: String,
-  rating: Number,
-  message: String,
-  createdAt: { type: Date, default: Date.now },
-});
+// ------------------------------
+// Routes
+// ------------------------------
 
-const Booking = mongoose.model("Booking", BookingSchema);
-const Review = mongoose.model("Review", ReviewSchema);
+// Health
+app.get("/api/health", (req, res) => res.json({ ok: true }));
 
-// ----------------------
-// BOOKING ROUTES
-// ----------------------
+// Create booking
 app.post("/api/bookings", async (req, res) => {
   try {
-    const newBooking = new Booking(req.body);
-    await newBooking.save();
-    res.json({ message: "Booking added", booking: newBooking });
-  } catch (err) {
-    res.status(500).json({ message: "Booking error" });
+    const bookingId = generateBookingId();
+
+    // ensure essential fields exist (basic validation)
+    const { name, phone, device, service, address, datetime } = req.body;
+
+    if (!name || !phone || !device || !service || !address) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: name, phone, device, service, address",
+      });
+    }
+
+    const newBooking = await Booking.create({
+      bookingId,
+      name,
+      phone,
+      device,
+      service,
+      address,
+      datetime: datetime || null,
+      status: "Pending",
+    });
+
+    res.json({
+      success: true,
+      message: "Booking created successfully",
+      bookingId,
+      data: newBooking,
+    });
+  } catch (error) {
+    console.error("Create booking error:", error);
+    res.status(500).json({ success: false, message: error.message || "Server error" });
   }
 });
 
-app.get("/api/bookings", async (req, res) => {
+// Get booking by bookingId
+app.get("/api/bookings/:bookingId", async (req, res) => {
   try {
-    const all = await Booking.find().sort({ _id: -1 });
-    res.json(all);
-  } catch (err) {
-    res.status(500).json({ message: "Fetch error" });
+    const booking = await Booking.findOne({ bookingId: req.params.bookingId });
+
+    if (!booking) {
+      return res.json({ success: false, message: "Booking not found" });
+    }
+
+    res.json({ success: true, booking });
+  } catch (error) {
+    console.error("Get booking error:", error);
+    res.status(500).json({ success: false, message: error.message || "Server error" });
   }
 });
 
-// ----------------------
-// REVIEW ROUTES
-// ----------------------
-app.post("/api/reviews", async (req, res) => {
-  try {
-    const newReview = new Review(req.body);
-    await newReview.save();
-    res.json({ message: "Review added", review: newReview });
-  } catch (err) {
-    res.status(500).json({ message: "Review error" });
-  }
-});
-
+// Reviews endpoints (already used by your frontend)
 app.get("/api/reviews", async (req, res) => {
   try {
-    const all = await Review.find().sort({ _id: -1 });
-    res.json(all);
+    const reviews = await Review.find().sort({ createdAt: -1 }).limit(50);
+    res.json(reviews);
   } catch (err) {
-    res.status(500).json({ message: "Fetch error" });
+    console.error("Get reviews error:", err);
+    res.status(500).json({ success: false, message: err.message || "Server error" });
   }
 });
 
-// ----------------------
-// TEST ROUTE
-// ----------------------
-app.get("/", (req, res) => {
-  res.send("Backend Running ✔");
+app.post("/api/reviews", async (req, res) => {
+  try {
+    const { name, rating, message } = req.body;
+    if (!name || !rating) {
+      return res.status(400).json({ success: false, message: "Missing name or rating" });
+    }
+    const r = await Review.create({ name, rating, message });
+    res.json({ success: true, data: r });
+  } catch (err) {
+    console.error("Create review error:", err);
+    res.status(500).json({ success: false, message: err.message || "Server error" });
+  }
 });
 
-// START SERVER
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log("Server running on port " + PORT));
+// Start server
+const PORT = process.env.PORT || 7000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
