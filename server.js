@@ -2,16 +2,15 @@
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
-import path from "path"; // ADDED
-import { fileURLToPath } from 'url'; // ADDED
-
-// --- START: PATH FIX FOR ES MODULES ---
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-// --- END: PATH FIX ---
+import path from "path"; // Added: for file path utilities
+import { fileURLToPath } from 'url'; // Added: for ES Module compatibility
 
 import Booking from "./Booking.js";
 import Review from "./Review.js";
+
+// Define __dirname for ES Module environments (Node.js fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename); 
 
 const app = express();
 
@@ -19,16 +18,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- START: SERVE FRONTEND (The fix for "Cannot GET /") ---
-// 1. Serve all static assets (CSS, JS, images, etc.) from the current directory
+// FIX for "Cannot GET /": Serve all static frontend files from the root directory.
+// This will automatically serve index.html when the user hits the base URL.
 app.use(express.static(__dirname));
-
-// 2. Explicitly handle the root path to serve index.html
-// This guarantees the frontend is loaded when you open the main link
-app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "index.html"));
-});
-// --- END: SERVE FRONTEND ---
 
 // MongoDB connection
 const mongoUrl = process.env.MONGO_URL || "your_mongo_url_here";
@@ -48,7 +40,7 @@ function generateBookingId() {
 }
 
 // ------------------------------
-// Routes (All prefixed with /api, so they won't conflict with the root route)
+// Routes
 // ------------------------------
 
 // Health
