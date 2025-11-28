@@ -2,14 +2,25 @@
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
-import Booking from "./Booking.js";
-import Review from "./Review.js";
+import path from "path"; // Added: for file path utilities
+import { fileURLToPath } from 'url'; // Added: for ES Module compatibility
+
+import Booking from "./models/Booking.js";
+import Review from "./models/Review.js";
+
+// Define __dirname for ES Module environments (Node.js fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename); 
 
 const app = express();
 
 // Middlewares
 app.use(cors());
 app.use(express.json());
+
+// FIX for "Cannot GET /": Serve all static frontend files from the root directory.
+// This will automatically serve index.html when the user hits the base URL.
+app.use(express.static(__dirname));
 
 // MongoDB connection
 const mongoUrl = process.env.MONGO_URL || "your_mongo_url_here";
