@@ -6,50 +6,34 @@ import Review from "./Review.js";
 
 const app = express();
 
-// ------------------------------
 // Middleware
-// ------------------------------
 app.use(cors({ origin: "*" }));
-app.options("*", cors());
 app.use(express.json());
 
-// ------------------------------
-// MongoDB Connect
-// ------------------------------
+// MongoDB connection
 const mongoUrl = process.env.MONGO_URL;
-
 if (!mongoUrl) {
-  console.error("❌ MONGO_URL is missing. Add it in Render environment.");
+  console.error("❌ MONGO_URL missing. Add it in Render.");
   process.exit(1);
 }
 
 mongoose
-  .connect(mongoUrl, { useNewUrlParser: true, useUnifiedTopology: true })
+  .connect(mongoUrl)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => {
-    console.log("❌ MongoDB error:", err.message);
+    console.error("❌ MongoDB error:", err.message);
     process.exit(1);
   });
 
-// ------------------------------
-// Generate Booking ID
-// ------------------------------
+// Booking ID generator
 function generateBookingId() {
   return "PHN-" + Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-// ------------------------------
-// ROUTES
-// ------------------------------
-app.get("/", (req, res) => {
-  res.send("Backend OK ✔");
-});
+// Health
+app.get("/api/health", (req, res) => res.json({ ok: true }));
 
-app.get("/api/health", (req, res) => {
-  res.json({ ok: true });
-});
-
-// Create Booking
+// Create booking
 app.post("/api/bookings", async (req, res) => {
   try {
     const bookingId = generateBookingId();
@@ -58,8 +42,7 @@ app.post("/api/bookings", async (req, res) => {
     if (!name || !phone || !device || !service || !address) {
       return res.status(400).json({
         success: false,
-        message:
-          "Missing required fields: name, phone, device, service, address",
+        message: "Missing required fields.",
       });
     }
 
@@ -76,18 +59,16 @@ app.post("/api/bookings", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Booking created successfully",
       bookingId,
       data: newBooking,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, message: error.message || "Server error" });
+    console.error("Create booking error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
-// Get Booking Status
+// Get booking
 app.get("/api/bookings/:bookingId", async (req, res) => {
   try {
     const booking = await Booking.findOne({
@@ -95,50 +76,40 @@ app.get("/api/bookings/:bookingId", async (req, res) => {
     });
 
     if (!booking) {
-      return res.json({ success: false, message: "Booking not found" });
+      return res.json({ success: false, message: "Not found" });
     }
 
     res.json({ success: true, booking });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, message: error.message || "Server error" });
+    console.error("Get booking error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
-// Get All Reviews
+// Reviews
 app.get("/api/reviews", async (req, res) => {
-  try {
-    const reviews = await Review.find().sort({ createdAt: -1 }).limit(50);
-    res.json(reviews);
-  } catch (err) {
-    res
-      .status(500)
-      .json({ success: false, message: err.message || "Server error" });
-  }
+  const reviews = await Review.find().sort({ createdAt: -1 }).limit(50);
+  res.json(reviews);
 });
 
-// Create Review
 app.post("/api/reviews", async (req, res) => {
   try {
     const { name, rating, message } = req.body;
+
     if (!name || !rating) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Missing name or rating" });
+      return res.status(400).json({
+        success: false,
+        message: "Missing name or rating",
+      });
     }
 
     const r = await Review.create({ name, rating, message });
     res.json({ success: true, data: r });
   } catch (err) {
-    res
-      .status(500)
-      .json({ success: false, message: err.message || "Server error" });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
-// ------------------------------
-// Start Server
-// ------------------------------
+// Server
 const PORT = process.env.PORT || 7000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => console.log("🚀 Server running on", PORT));
