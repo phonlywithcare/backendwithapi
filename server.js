@@ -5,8 +5,8 @@ import cors from "cors";
 import path from "path"; // Added: for file path utilities
 import { fileURLToPath } from 'url'; // Added: for ES Module compatibility
 
-import Booking from "./models/Booking.js";
-import Review from "./models/Review.js";
+import Booking from "./Booking.js";
+import Review from "./Review.js";
 
 // Define __dirname for ES Module environments (Node.js fix)
 const __filename = fileURLToPath(import.meta.url);
