@@ -1,0 +1,22 @@
+// models/Booking.js
+import mongoose from "mongoose";
+
+const bookingSchema = new mongoose.Schema(
+  {
+    bookingId: { type: String, unique: true, index: true, required: true },
+    name: { type: String, required: true },
+    phone: { type: String, required: true },
+    device: { type: String, required: true },
+    service: { type: String, required: true },
+    address: { type: String, required: true },
+    datetime: { type: String, default: null },
+    status: {
+      type: String,
+      enum: ["Pending", "Accepted", "On The Way", "Repairing", "Completed", "Cancelled"],
+      default: "Pending",
+    },
+  },
+  { timestamps: true }
+);
+
+export default mongoose.models.Booking || mongoose.model("Booking", bookingSchema);
