@@ -2,8 +2,6 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
-import http from "http";             // ⭐ Added
-import { Server } from "socket.io";  // ⭐ Added
 
 dotenv.config();
 
@@ -12,22 +10,6 @@ const app = express();
 // MIDDLEWARE
 app.use(cors());
 app.use(express.json());
-
-// CREATE SERVER FOR SOCKET.IO
-const server = http.createServer(app);   // ⭐ Important
-
-// INITIALIZE SOCKET SERVER
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
-});
-
-// LISTEN FOR CONNECTIONS
-io.on("connection", (socket) => {
-  console.log("Admin connected via Socket.io ✔");
-});
 
 // CONNECT TO MONGODB
 mongoose.connect(process.env.MONGO_URL, {
@@ -42,10 +24,10 @@ const BookingSchema = new mongoose.Schema({
   name: String,
   phone: String,
   device: String,
-  issue: String,
-  date: String,
-  time: String,
-  status: { type: String, default: "Pending" },
+   issue: String,   // add this
+  date: String,    // add this
+  time: String,    // add this
+  status: { type: String, default: "Pending" }, // add statu
   service: String,
   address: String,
   datetime: String,
@@ -69,10 +51,6 @@ app.post("/api/bookings", async (req, res) => {
   try {
     const newBooking = new Booking(req.body);
     await newBooking.save();
-
-    // 🔔 SEND LIVE NOTIFICATION TO ADMIN
-    io.emit("new-booking", newBooking);
-
     res.json({ message: "Booking added", booking: newBooking });
   } catch (err) {
     res.status(500).json({ message: "Booking error" });
@@ -114,9 +92,9 @@ app.get("/api/reviews", async (req, res) => {
 // TEST ROUTE
 // ----------------------
 app.get("/", (req, res) => {
-  res.send("Backend Running ✔ with Socket.io");
+  res.send("Backend Running ✔");
 });
 
-// START SERVER (IMPORTANT: use server instead of app)
+// START SERVER
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log("Server running with Socket.io on port " + PORT));
+app.listen(PORT, () => console.log("Server running on port " + PORT));
