@@ -2,59 +2,75 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
+import http from "http";
+import { Server } from "socket.io";
 
 dotenv.config();
 
 const app = express();
-
-// MIDDLEWARE
 app.use(cors());
 app.use(express.json());
 
-// CONNECT TO MONGODB
-// Removed deprecated options
-mongoose.connect(process.env.MONGO_URL) 
-.then(() => console.log("MongoDB Connected ✔"))
-.catch((err) => console.log("Mongo Error ❌", err));
+const server = http.createServer(app);
 
-// SCHEMAS
+const io = new Server(server, {
+  cors: { origin: "*", methods: ["GET", "POST"] }
+});
+
+// SOCKET CONNECTION
+io.on("connection", (socket) => {
+  console.log("Admin connected ✔");
+});
+
+// CONNECT MONGO
+mongoose.connect(process.env.MONGO_URL, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
+
+// SCHEMA
 const BookingSchema = new mongoose.Schema({
+  bookingId: { type: String, unique: true },   // ⭐ FIXED
   name: String,
   phone: String,
   device: String,
-  // Removed issue, date, and time fields to fix 500 error.
+  issue: String,
+  date: String,
+  time: String,
+  status: { type: String, default: "Pending" },
   service: String,
   address: String,
-  datetime: String, // Stores the full datetime string from the form
-  status: { type: String, default: "Pending" },
+  datetime: String,
   createdAt: { type: Date, default: Date.now },
 });
 
-const ReviewSchema = new mongoose.Schema({
-  name: String,
-  rating: Number,
-  message: String,
-  createdAt: { type: Date, default: Date.now },
+// ⭐ AUTO GENERATE BOOKING ID
+BookingSchema.pre("save", async function (next) {
+  if (!this.bookingId) {
+    const count = await Booking.countDocuments();
+    this.bookingId = "PHN" + String(count + 1).padStart(5, "0");
+  }
+  next();
 });
 
 const Booking = mongoose.model("Booking", BookingSchema);
-const Review = mongoose.model("Review", ReviewSchema);
 
-// ----------------------
-// BOOKING ROUTES
-// ----------------------
+// ADD BOOKING
 app.post("/api/bookings", async (req, res) => {
   try {
     const newBooking = new Booking(req.body);
     await newBooking.save();
+
+    // Live Update
+    io.emit("new-booking", newBooking);
+
     res.json({ message: "Booking added", booking: newBooking });
   } catch (err) {
-    // Log the actual error to the console for debugging
-    console.error("Booking save error:", err); 
-    res.status(500).json({ message: "Booking error" });
+    res.status(500).json({ message: "Booking error", error: err });
   }
 });
 
+// GET BOOKINGS
 app.get("/api/bookings", async (req, res) => {
   try {
     const all = await Booking.find().sort({ _id: -1 });
@@ -64,61 +80,9 @@ app.get("/api/bookings", async (req, res) => {
   }
 });
 
-// ----------------------
-// REVIEW ROUTES
-// ----------------------
-app.post("/api/reviews", async (req, res) => {
-  try {
-    const newReview = new Review(req.body);
-    await newReview.save();
-    res.json({ message: "Review added", review: newReview });
-  } catch (err) {
-    res.status(500).json({ message: "Review error" });
-  }
-});
-
-app.get("/api/reviews", async (req, res) => {
-  try {
-    const all = await Review.find().sort({ _id: -1 });
-    res.json(all);
-  } catch (err) {
-    res.status(500).json({ message: "Fetch error" });
-  }
-});
-
-// ----------------------
-// TEST ROUTE
-// ----------------------
 app.get("/", (req, res) => {
   res.send("Backend Running ✔");
 });
 
-// START SERVER
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log("Server running on port " + PORT));
-
-// ----------------------
-// UPDATE BOOKING STATUS (ADMIN)
-// ----------------------
-app.put("/api/bookings/:id", async (req, res) => {
-  try {
-    const { status } = req.body;
-
-    const updated = await Booking.findByIdAndUpdate(
-      req.params.id,
-      { status: status },
-      { new: true }
-    );
-
-    if (!updated) {
-      return res.status(404).json({ message: "Booking not found" });
-    }
-
-    // 🔔 Send live update to admin (optional)
-    io.emit("status-updated", updated);
-
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ message: "Update error" });
-  }
-});
+server.listen(PORT, () => console.log("Server running on port " + PORT));
