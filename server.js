@@ -19,21 +19,31 @@ mongoose.connect(process.env.MONGO_URL, {
 .then(() => console.log("MongoDB Connected ✔"))
 .catch((err) => console.log("Mongo Error ❌", err));
 
-// SCHEMAS
+
+// =========================
+// UPDATED BOOKING SCHEMA
+// =========================
 const BookingSchema = new mongoose.Schema({
   name: String,
   phone: String,
-  device: String,
-   issue: String,   // add this
-  date: String,    // add this
-  time: String,    // add this
-  status: { type: String, default: "Pending" }, // add statu
+  brand: String,
   service: String,
   address: String,
-  datetime: String,
+
+  preferredDate: String,   // from frontend
+  preferredTime: String,   // from frontend
+
+  status: { type: String, default: "Pending" },
+
   createdAt: { type: Date, default: Date.now },
 });
 
+const Booking = mongoose.model("Booking", BookingSchema);
+
+
+// =========================
+// REVIEW SCHEMA
+// =========================
 const ReviewSchema = new mongoose.Schema({
   name: String,
   rating: Number,
@@ -41,22 +51,29 @@ const ReviewSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-const Booking = mongoose.model("Booking", BookingSchema);
 const Review = mongoose.model("Review", ReviewSchema);
 
-// ----------------------
+
+// =========================
 // BOOKING ROUTES
-// ----------------------
+// =========================
+
+// ADD BOOKING
 app.post("/api/bookings", async (req, res) => {
   try {
-    const newBooking = new Booking(req.body);
-    await newBooking.save();
-    res.json({ message: "Booking added", booking: newBooking });
+    console.log("New booking received →", req.body);
+
+    const booking = new Booking(req.body);
+    await booking.save();
+
+    res.json({ message: "Booking added ✔", booking });
   } catch (err) {
-    res.status(500).json({ message: "Booking error" });
+    console.error("Booking Save Error ❌", err);
+    res.status(500).json({ message: "Booking error", error: err.message });
   }
 });
 
+// GET ALL BOOKINGS
 app.get("/api/bookings", async (req, res) => {
   try {
     const all = await Booking.find().sort({ _id: -1 });
@@ -66,19 +83,24 @@ app.get("/api/bookings", async (req, res) => {
   }
 });
 
-// ----------------------
+
+// =========================
 // REVIEW ROUTES
-// ----------------------
+// =========================
+
+// ADD REVIEW
 app.post("/api/reviews", async (req, res) => {
   try {
-    const newReview = new Review(req.body);
-    await newReview.save();
-    res.json({ message: "Review added", review: newReview });
+    const review = new Review(req.body);
+    await review.save();
+    res.json({ message: "Review added ✔", review });
   } catch (err) {
+    console.error("Review Error ❌", err);
     res.status(500).json({ message: "Review error" });
   }
 });
 
+// GET ALL REVIEWS
 app.get("/api/reviews", async (req, res) => {
   try {
     const all = await Review.find().sort({ _id: -1 });
@@ -88,12 +110,14 @@ app.get("/api/reviews", async (req, res) => {
   }
 });
 
-// ----------------------
+
+// =========================
 // TEST ROUTE
-// ----------------------
+// =========================
 app.get("/", (req, res) => {
   res.send("Backend Running ✔");
 });
+
 
 // START SERVER
 const PORT = process.env.PORT || 5000;
