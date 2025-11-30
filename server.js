@@ -12,10 +12,8 @@ app.use(cors());
 app.use(express.json());
 
 // CONNECT TO MONGODB
-mongoose.connect(process.env.MONGO_URL, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+// Removed deprecated options
+mongoose.connect(process.env.MONGO_URL) 
 .then(() => console.log("MongoDB Connected ✔"))
 .catch((err) => console.log("Mongo Error ❌", err));
 
@@ -24,13 +22,11 @@ const BookingSchema = new mongoose.Schema({
   name: String,
   phone: String,
   device: String,
-   issue: String,   // add this
-  date: String,    // add this
-  time: String,    // add this
-  status: { type: String, default: "Pending" }, // add statu
+  // Removed issue, date, and time fields to fix 500 error.
   service: String,
   address: String,
-  datetime: String,
+  datetime: String, // Stores the full datetime string from the form
+  status: { type: String, default: "Pending" },
   createdAt: { type: Date, default: Date.now },
 });
 
@@ -53,6 +49,8 @@ app.post("/api/bookings", async (req, res) => {
     await newBooking.save();
     res.json({ message: "Booking added", booking: newBooking });
   } catch (err) {
+    // Log the actual error to the console for debugging
+    console.error("Booking save error:", err); 
     res.status(500).json({ message: "Booking error" });
   }
 });
