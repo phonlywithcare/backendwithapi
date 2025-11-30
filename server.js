@@ -28,11 +28,11 @@ const BookingSchema = new mongoose.Schema({
   service: { type: String, required: true },
   address: { type: String, required: true },
   datetime: { type: String, required: true },
-
   status: { type: String, default: "Pending" },
   createdAt: { type: Date, default: Date.now }
 });
 
+const Booking = mongoose.model("Booking", BookingSchema);
 
 // ===============================
 // REVIEW SCHEMA
