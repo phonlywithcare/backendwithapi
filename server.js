@@ -21,22 +21,17 @@ mongoose
   .catch((err) => console.log("Mongo Error ❌", err));
 
 
-// ===============================
-// CORRECT BOOKING SCHEMA
-// ===============================
 const BookingSchema = new mongoose.Schema({
-  name: String,
-  phone: String,
-  device: String,     // matches frontend
-  service: String,    // matches frontend
-  address: String,    // matches frontend
-  datetime: String,   // matches frontend
+  name: { type: String, required: true },
+  phone: { type: String, required: true },
+  device: { type: String, required: true },
+  service: { type: String, required: true },
+  address: { type: String, required: true },
+  datetime: { type: String, required: true },
 
   status: { type: String, default: "Pending" },
   createdAt: { type: Date, default: Date.now }
 });
-
-const Booking = mongoose.model("Booking", BookingSchema);
 
 
 // ===============================
