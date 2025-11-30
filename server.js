@@ -12,21 +12,32 @@ app.use(cors());
 app.use(express.json());
 
 // CONNECT TO MONGODB
-// Removed deprecated options
-mongoose.connect(process.env.MONGO_URL) 
+// Removed deprecated options as they are unnecessary in recent Mongoose versions
+mongoose.connect(process.env.MONGO_URL)
 .then(() => console.log("MongoDB Connected ✔"))
 .catch((err) => console.log("Mongo Error ❌", err));
 
 // SCHEMAS
 const BookingSchema = new mongoose.Schema({
+  // FIX: Added unique bookingId field with an auto-generator to fix the E11000 error
+  bookingId: { 
+    type: String,
+    unique: true,
+    required: true,
+    // Generates a random 7-character alphanumeric ID like '3XW8T1L'
+    default: () => Math.random().toString(36).slice(2, 9).toUpperCase(), 
+  },
   name: String,
   phone: String,
   device: String,
-  // Removed issue, date, and time fields to fix 500 error.
+   issue: String,   // add this
+  date: String,    // add this
+  time: String,    // add this
+  // The client will only update this status field when checking a booking.
+  status: { type: String, default: "Pending" }, 
   service: String,
   address: String,
-  datetime: String, // Stores the full datetime string from the form
-  status: { type: String, default: "Pending" },
+  datetime: String,
   createdAt: { type: Date, default: Date.now },
 });
 
@@ -47,10 +58,11 @@ app.post("/api/bookings", async (req, res) => {
   try {
     const newBooking = new Booking(req.body);
     await newBooking.save();
-    res.json({ message: "Booking added", booking: newBooking });
+    // NEW: Return the generated bookingId to the client
+    res.json({ message: "Booking added", booking: newBooking, bookingId: newBooking.bookingId });
   } catch (err) {
-    // Log the actual error to the console for debugging
-    console.error("Booking save error:", err); 
+    // We are now logging the error, which helped debug the E11000 issue
+    console.error("Booking save error:", err);
     res.status(500).json({ message: "Booking error" });
   }
 });
@@ -64,8 +76,32 @@ app.get("/api/bookings", async (req, res) => {
   }
 });
 
+// NEW: Route to check booking status by unique ID
+app.get("/api/bookings/:id", async (req, res) => {
+  try {
+    const booking = await Booking.findOne({ bookingId: req.params.id.toUpperCase() });
+
+    if (!booking) {
+      return res.status(404).json({ message: "Booking ID not found" });
+    }
+    
+    // Return only necessary status details
+    res.json({
+        id: booking.bookingId,
+        status: booking.status,
+        device: booking.device,
+        service: booking.service,
+        datetime: booking.datetime,
+        name: booking.name
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching status" });
+  }
+});
+
+
 // ----------------------
-// REVIEW ROUTES
+// REVIEW ROUTES (NO CHANGE)
 // ----------------------
 app.post("/api/reviews", async (req, res) => {
   try {
