@@ -11,21 +11,28 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// CONNECT TO MONGODB
-// Removed deprecated options
-mongoose.connect(process.env.MONGO_URL) 
-.then(() => console.log("MongoDB Connected ✔"))
-.catch((err) => console.log("Mongo Error ❌", err));
+// CONNECT TO MONGO
+mongoose.connect(process.env.MONGO_URL)
+  .then(() => console.log("MongoDB Connected ✔"))
+  .catch((err) => console.log("Mongo Error ❌", err));
+
+// ULTRA UNIQUE BOOKING ID GENERATOR
+function generateBookingId() {
+  const prefix = "PHN";
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const random = Math.floor(10000 + Math.random() * 90000);
+  return `${prefix}-${date}-${random}`;
+}
 
 // SCHEMAS
 const BookingSchema = new mongoose.Schema({
+  bookingId: { type: String, unique: true },
   name: String,
   phone: String,
   device: String,
-  // Removed issue, date, and time fields to fix 500 error.
   service: String,
   address: String,
-  datetime: String, // Stores the full datetime string from the form
+  datetime: String,
   status: { type: String, default: "Pending" },
   createdAt: { type: Date, default: Date.now },
 });
@@ -40,17 +47,18 @@ const ReviewSchema = new mongoose.Schema({
 const Booking = mongoose.model("Booking", BookingSchema);
 const Review = mongoose.model("Review", ReviewSchema);
 
-// ----------------------
 // BOOKING ROUTES
-// ----------------------
 app.post("/api/bookings", async (req, res) => {
   try {
-    const newBooking = new Booking(req.body);
+    const bookingId = generateBookingId();
+    const newBooking = new Booking({
+      bookingId,
+      ...req.body
+    });
     await newBooking.save();
-    res.json({ message: "Booking added", booking: newBooking });
+    res.json({ message: "Booking added", bookingId, booking: newBooking });
   } catch (err) {
-    // Log the actual error to the console for debugging
-    console.error("Booking save error:", err); 
+    console.error("Booking save error:", err);
     res.status(500).json({ message: "Booking error" });
   }
 });
@@ -64,9 +72,19 @@ app.get("/api/bookings", async (req, res) => {
   }
 });
 
-// ----------------------
+app.get("/api/bookings/:bookingId", async (req, res) => {
+  try {
+    const booking = await Booking.findOne({ bookingId: req.params.bookingId });
+    if (!booking) {
+      return res.status(404).json({ message: "Invalid Booking ID" });
+    }
+    res.json(booking);
+  } catch (err) {
+    res.status(500).json({ message: "Fetch error" });
+  }
+});
+
 // REVIEW ROUTES
-// ----------------------
 app.post("/api/reviews", async (req, res) => {
   try {
     const newReview = new Review(req.body);
@@ -86,13 +104,9 @@ app.get("/api/reviews", async (req, res) => {
   }
 });
 
-// ----------------------
-// TEST ROUTE
-// ----------------------
 app.get("/", (req, res) => {
   res.send("Backend Running ✔");
 });
 
-// START SERVER
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log("Server running on port " + PORT));
