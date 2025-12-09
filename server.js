@@ -6,13 +6,15 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-
 // ================== MIDDLEWARE ==================
 app.use(cors({
-  origin: "*", // Change to your frontend domain later
-  methods: ["GET", "POST", "PUT"],
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 }));
+
 app.use(express.json());
+
 
 // ================== CONNECT TO MONGO ==================
 mongoose.connect(process.env.MONGO_URL)
