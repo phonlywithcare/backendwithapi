@@ -4,10 +4,49 @@ import { sendWhatsAppMessage } from "../utils/whatsapp.js";
 
 const router = express.Router();
 
-// UPDATE STATUS + AUTO WHATSAPP
+// ================= CREATE BOOKING =================
+router.post("/", async (req, res) => {
+  try {
+    const booking = new Booking(req.body);
+    await booking.save();
+    res.json({ success: true, booking });
+  } catch (err) {
+    res.status(500).json({ message: "Booking error" });
+  }
+});
+
+// ================= GET ALL BOOKINGS (ADMIN) =================
+router.get("/", async (req, res) => {
+  try {
+    const bookings = await Booking.find().sort({ createdAt: -1 });
+    res.json(bookings);
+  } catch (err) {
+    res.status(500).json({ message: "Fetch error" });
+  }
+});
+
+// ================= GET BOOKING BY BOOKING ID =================
+router.get("/:bookingId", async (req, res) => {
+  try {
+    const booking = await Booking.findOne({
+      bookingId: req.params.bookingId
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: "Invalid Booking ID" });
+    }
+
+    res.json(booking);
+  } catch (err) {
+    res.status(500).json({ message: "Fetch error" });
+  }
+});
+
+// ================= UPDATE STATUS + WHATSAPP =================
 router.put("/:id", async (req, res) => {
   try {
-    const { status } = req.body;
+    let { status } = req.body;
+    status = status.toLowerCase(); // normalize
 
     const booking = await Booking.findByIdAndUpdate(
       req.params.id,
@@ -33,8 +72,8 @@ router.put("/:id", async (req, res) => {
 
     res.json({ success: true, booking });
 
-  } catch (error) {
-    res.status(500).json({ error: "Status update failed" });
+  } catch (err) {
+    res.status(500).json({ message: "Status update failed" });
   }
 });
 
